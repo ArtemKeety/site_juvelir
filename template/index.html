@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tovar List</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+        }
+        .sidebar {
+            width: 200px;
+            background-color: #f8f9fa;
+            padding: 20px;
+            height: 100vh;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+        }
+        .content {
+            flex-grow: 1;
+            padding: 20px;
+        }
+        h2 { margin-top: 0; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 10px; border: 1px solid #ddd; text-align: left; }
+        th { background-color: #f4f4f4; }
+        img { width: 50px; height: 50px; object-fit: cover; }
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+            text-align: center;
+            text-decoration: none;
+            color: white;
+            background-color: #007bff;
+            border-radius: 5px;
+        }
+        .btn:hover { background-color: #0056b3; }
+        .btn-logout { background-color: #dc3545; }
+        .btn-logout:hover { background-color: #b02a37; }
+        .status {
+            font-weight: bold;
+        }
+        .btn-add {
+            background-color: #28a745;
+            margin-top: 10px;
+        }
+        .btn-add:hover {
+            background-color: #218838;
+        }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h3>Меню</h3>
+    {{ if .User }}
+    <p>Привет, {{ .User.Login }}</p>
+    <a href="/basket/" class="btn btn-logout">Корзина</a>
+    <a href="/logout/" class="btn btn-logout">Выход</a>
+    {{ else }}
+    <a href="/login" class="btn">Вход</a>
+    <a href="/register" class="btn">Регистрация</a>
+    {{ end }}
+</div>
+
+<div class="content">
+    <h2>Tovar List</h2>
+    <table>
+        <thead>
+        <tr>
+            <th>Name</th>
+            <th>Price</th>
+            <th>Image</th>
+            <th>Status</th>
+            <th>Action</th>
+        </tr>
+        </thead>
+        <tbody>
+        {{ range .Tovars }}
+        <tr data-tovar-id="{{ .Id }}">
+            <td> <a href="/tovar/{{ .Id }}/"> {{ .Name }} </a> </td>
+            <td>{{ .Price }}</td>
+            <td>
+                {{ if .PhotoPath }}
+                <img src="/static/images/{{ .PhotoPath }}" alt="Tovar Image">
+                {{ else }}
+                No image
+                {{ end }}
+            </td>
+            <td class="status">Checking...</td>
+            <td><button class="btn btn-add" data-tovar-id="{{ .Id }}">Добавить в корзину</button></td>
+        </tr>
+        {{ end }}
+        </tbody>
+    </table>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const rows = document.querySelectorAll("tr[data-tovar-id]");
+
+        // Проверка статуса товара в корзине
+        rows.forEach(row => {
+            const tovarID = row.getAttribute("data-tovar-id");
+            fetch(`/api/CheckTovarById/?tovar_id=${tovarID}`)
+                .then(response => response.json())
+                .then(data => {
+                    const statusCell = row.querySelector(".status");
+                    if (data.status) {
+                        statusCell.textContent = "В корзине";
+                        statusCell.style.color = "green";
+                    } else {
+                        statusCell.textContent = "Нет в корзине";
+                        statusCell.style.color = "red";
+                    }
+                })
+                .catch(error => {
+                    console.error("Ошибка загрузки статуса:", error);
+                    row.querySelector(".status").textContent = "Ошибка";
+                    row.querySelector(".status").style.color = "gray";
+                });
+
+            // Добавление товара в корзину при нажатии на кнопку
+            const addButton = row.querySelector(".btn-add");
+            addButton.addEventListener("click", function() {
+                const tovarID = row.getAttribute("data-tovar-id");
+
+                // Выводим ID в консоль
+                console.log("Добавление товара с ID:", tovarID);
+
+                fetch("/api/AddToCart/", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ id: tovarID }) // Убедитесь, что данные сериализуются в JSON
+                })
+
+                    .then(response => response.text()) // Получаем ответ как текст
+                    .then(data => {
+                        console.log("Ответ сервера:", data); // Логируем ответ
+                        try {
+                            const parsedData = JSON.parse(data); // Преобразуем в JSON
+                            if (parsedData.status === "success") {
+                                alert("Товар добавлен в корзину!");
+                            } else {
+                                alert("Ошибка при добавлении товара в корзину.");
+                            }
+                        } catch (error) {
+                            console.error("Ошибка при парсинге JSON:", error);
+                            alert("Ошибка при добавлении товара.");
+                        }
+                    })
+                    .catch(error => {
+                        console.error("Ошибка добавления товара:", error);
+                        alert("Ошибка при добавлении товара.");
+                    });
+            });
+        });
+    });
+</script>
+
+</body>
+</html>

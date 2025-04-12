@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Корзина</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        h2 {
+            text-align: center;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 10px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background-color: #f4f4f4;
+        }
+        img {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+        }
+        .btn {
+            display: inline-block;
+            padding: 8px 12px;
+            text-decoration: none;
+            color: white;
+            background-color: #007bff;
+            border-radius: 5px;
+        }
+        .btn-danger {
+            background-color: #dc3545;
+        }
+        .btn:hover {
+            opacity: 0.8;
+        }
+        #total-sum {
+            text-align: center;
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<h2>Ваша корзина</h2>
+
+<table>
+    <thead>
+    <tr>
+        <th>Фото</th>
+        <th>Название</th>
+        <th>Цена</th>
+        <th>Количество</th>
+        <th>Итого</th>
+        <th>Максимум</th>
+        <th>Действия</th>
+    </tr>
+    </thead>
+    <tbody>
+    {{ if . }}
+    {{ range . }}
+    <tr>
+        <td><img src="/static/images/{{ .Tovar.PhotoPath }}" alt="{{ .Tovar.Name }}"></td>
+        <td>{{ .Tovar.Name }}</td>
+        <td>{{ .Tovar.Price }} USD</td>
+        <td>
+            <input type="number" id="quantity-{{ .Tovar.Id }}" name="quantity" min="1" value="{{ .Counts }}" max="{{ .Tovar.Count }}" class="form-control quantity-input">
+        </td>
+        <td class="total-price" id="total-price-{{ .Tovar.Id }}">0 USD</td>
+        <td>{{ .Tovar.Count }}</td>
+        <td>
+            <button class="btn btn-danger delete-btn" data-id="{{ .Id }}">Удалить</button>
+            <button class="btn" id="update-{{ .Id }}" data-id="{{ .Id }}" data-tovar-id="{{ .Tovar.Id }}" data-quantity="{{ .Counts }}">Изменить</button>
+        </td>
+    </tr>
+    {{ end }}
+    {{ else }}
+    <tr>
+        <td colspan="6" style="text-align: center;">Ваша корзина пуста</td>
+    </tr>
+    {{ end }}
+    </tbody>
+</table>
+
+<div id="total-sum">Общая сумма: <span id="sum-value">0</span> USD</div>
+
+<div style="text-align: center; margin-top: 20px;">
+    <a href="/" class="btn">Продолжить покупки</a>
+    <a href="/order/checkout" class="btn">Оформить заказ</a>
+    <button id="clear-cart" class="btn btn-danger">Очистить корзину</button>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        // Функция для получения текущей цены товара по ID и количеству
+        function getTotalPrice(tovarId, quantity) {
+            return fetch(`http://localhost:8080/api/GetCurrentPriceByIdTovar/?tovar_id=${tovarId}&count=${quantity}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.CurrentPrice !== undefined) {
+                        return data.CurrentPrice;
+                    } else {
+                        return 0;
+                    }
+                })
+                .catch(error => {
+                    console.error("Ошибка получения цены товара:", error);
+                    return 0;
+                });
+        }
+
+        // Загрузка и отображение цен для всех товаров
+        document.querySelectorAll(".quantity-input").forEach(input => {
+            let tovarId = input.id.split('-')[1]; // Получаем ID товара
+            let quantity = input.value; // Получаем количество
+
+            getTotalPrice(tovarId, quantity).then(price => {
+                let totalPriceElement = document.getElementById(`total-price-${tovarId}`);
+                totalPriceElement.textContent = `${price} USD`;
+            });
+        });
+
+        // Обновление общей суммы
+        fetch("http://localhost:8080/api/GetTotalSumByUserId/")
+            .then(response => response.json())
+            .then(data => {
+                if (data && data.totalsum !== undefined) {
+                    document.getElementById("sum-value").textContent = data.totalsum;
+                }
+            })
+            .catch(error => console.error("Ошибка загрузки общей суммы:", error));
+
+        // Обработчик изменения количества товара
+        document.querySelectorAll(".quantity-input").forEach(input => {
+            input.addEventListener("change", function () {
+                let tovarId = this.id.split('-')[1];  // Получаем ID товара
+                let quantity = this.value;  // Получаем новое количество
+
+                // Обновляем цену
+                getTotalPrice(tovarId, quantity).then(price => {
+                    let totalPriceElement = document.getElementById(`total-price-${tovarId}`);
+                    totalPriceElement.textContent = `${price} USD`;
+                });
+            });
+        });
+
+        // Обработчик кнопки "Изменить"
+        document.querySelectorAll(".btn").forEach(button => {
+            if (button.id.startsWith("update-")) {
+                button.addEventListener("click", function () {
+                    let basketId = this.getAttribute("data-id");  // Получаем basketId
+                    let tovarId = this.getAttribute("data-tovar-id"); // Получаем ID товара
+                    let quantityInput = document.getElementById(`quantity-${tovarId}`);
+
+                    if (!quantityInput) {
+                        console.error(`Элемент с ID quantity-${tovarId} не найден`);
+                        return;
+                    }
+
+                    let quantity = quantityInput.value;  // Получаем количество товара
+
+                    // Отправляем запрос на обновление количества товара в корзине
+                    fetch("http://localhost:8080/api/UpdateToCart/", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            basketId: basketId,  // Передаем basketId
+                            quantity: quantity   // Передаем новое количество
+                        })
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.error) {
+                                alert("Ошибка: " + data.error);
+                            } else {
+                                alert("Количество товара обновлено!");
+
+                                // Обновляем общую сумму корзины после успешного обновления товара
+                                updateTotalSum();
+                            }
+                        })
+                        .catch(error => console.error("Ошибка при обновлении товара в корзине:", error));
+                });
+            }
+        });
+    });
+
+    document.addEventListener("DOMContentLoaded", function () {
+        document.querySelectorAll(".delete-btn").forEach(button => {
+            button.addEventListener("click", function () {
+                let basketId = this.getAttribute("data-id");
+                fetch("http://localhost:8080/api/DeleteToCart/", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ basketId: basketId })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (!data.error) {
+                            document.getElementById(`row-${basketId}`).remove();
+                            updateTotalSum();
+                            alert("товар успешно удалён!");
+                        } else {
+                            alert("Ошибка: " + data.error);
+                        }
+                    })
+                    .catch(error => console.error("Ошибка при удалении товара:", error));
+            });
+        });
+    });
+
+    document.addEventListener("DOMContentLoaded", function () {
+        document.getElementById("clear-cart").addEventListener("click", function () {
+            fetch("http://localhost:8080/api/ClearToCart/", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.error) {
+                        alert("Корзина очищена!");
+                        //location.reload();
+                    } else {
+                        alert("Ошибка: " + data.error);
+                    }
+                })
+                .catch(error => console.error("Ошибка при очистке корзины:", error));
+        });
+    });
+
+    // Функция для обновления общей суммы корзины
+    function updateTotalSum() {
+        let totalSum = 0;
+        document.querySelectorAll(".total-price").forEach(priceElement => {
+            let priceText = priceElement.textContent.replace(' USD', '');
+            totalSum += parseFloat(priceText);
+        });
+        document.getElementById("sum-value").textContent = totalSum + " USD";
+    }
+
+</script>
+
+</body>
+</html>

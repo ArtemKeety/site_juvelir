@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ .Tovar.Name }}</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+    }
+    .sidebar {
+      width: 200px;
+      background-color: #f8f9fa;
+      padding: 20px;
+      height: 100vh;
+      box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+    }
+    .product-detail {
+      padding: 20px;
+    }
+    h2 { margin-top: 0; }
+    img { width: 250px; height: 250px; object-fit: cover; }
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+      text-align: center;
+      text-decoration: none;
+      color: white;
+      background-color: #007bff;
+      border-radius: 5px;
+    }
+    .btn:hover { background-color: #0056b3; }
+    .btn-logout { background-color: #dc3545; }
+    .btn-logout:hover { background-color: #b02a37; }
+    .btn-add { background-color: #28a745; }
+    .btn-add:hover { background-color: #218838; }
+    .status { font-weight: bold; }
+  </style>
+</head>
+<body>
+<div class="sidebar">
+  <h3>Меню</h3>
+  {{ if .User }}
+  <p>Привет, {{ .User.Login }}</p>
+  <a href="/logout/" class="btn btn-logout">Выход</a>
+  {{ else }}
+  <a href="/login" class="btn">Вход</a>
+  <a href="/register" class="btn">Регистрация</a>
+  {{ end }}
+</div>
+
+<div class="product-detail">
+  <h2>{{ .Tovar.Name }}</h2>
+
+  {{ if .Tovar.Photos }}
+  <div class="product-images">
+    {{ range .Tovar.Photos }}
+    <img src="/static/images/{{ .Filepath }}" alt="{{ $.Tovar.Name }} Image">
+    {{ end }}
+  </div>
+  {{ else }}
+  <p>No images available</p>
+  {{ end }}
+
+  <p class="price">Price: {{ .Tovar.Price }} USD</p>
+  <p>Count in stock: {{ .Tovar.Counts }}</p>
+  <p class="status" id="status">Checking...</p>
+  <button class="btn btn-add" id="add-to-cart" data-tovar-id="{{ .Tovar.Id }}">Добавить в корзину</button>
+
+  <p>
+    <a href="/">Back to product list</a>
+  </p>
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    const tovarID = document.getElementById("add-to-cart").getAttribute("data-tovar-id");
+    const statusText = document.getElementById("status");
+    const addToCartBtn = document.getElementById("add-to-cart");
+
+    // Проверка статуса товара в корзине
+    fetch(`/api/CheckTovarById/?tovar_id=${tovarID}`)
+            .then(response => response.json())
+            .then(data => {
+              if (data.status) {
+                statusText.textContent = "В корзине";
+                statusText.style.color = "green";
+              } else {
+                statusText.textContent = "Нет в корзине";
+                statusText.style.color = "red";
+              }
+            })
+            .catch(error => {
+              console.error("Ошибка загрузки статуса:", error);
+              statusText.textContent = "Ошибка";
+              statusText.style.color = "gray";
+            });
+
+    // Добавление товара в корзину
+    addToCartBtn.addEventListener("click", function() {
+      fetch("/api/AddToCart/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ id: tovarID })
+      })
+              .then(response => response.json())
+              .then(data => {
+                if (data.status === "success") {
+                  alert("Товар добавлен в корзину!");
+                  statusText.textContent = "В корзине";
+                  statusText.style.color = "green";
+                } else {
+                  alert("Ошибка при добавлении товара в корзину.");
+                }
+              })
+              .catch(error => {
+                console.error("Ошибка добавления товара:", error);
+                alert("Ошибка при добавлении товара.");
+              });
+    });
+  });
+</script>
+
+</body>
+</html>
